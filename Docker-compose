@@ -1,0 +1,96 @@
+volumes:
+  ny_taxi_postgres_data:
+    driver: local
+  kestra_postgres_data:
+    driver: local
+  kestra_data:
+    driver: local
+
+services:
+  pgdatabase:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: ny_taxi
+    ports:
+      - "5434:5432"
+    volumes:
+      - ny_taxi_postgres_data:/var/lib/postgresql
+
+  pgadmin:
+    image: dpage/pgadmin4
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD=root
+    ports:
+      - "8086:80"
+
+  kestra_postgres:
+    image: postgres:18
+    volumes:
+      - kestra_postgres_data:/var/lib/postgresql
+    environment:
+      POSTGRES_DB: kestra
+      POSTGRES_USER: kestra
+      POSTGRES_PASSWORD: k3str4
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+
+  kestra:
+    image: kestra/kestra:v1.1
+    pull_policy: always
+    # Note that this setup with a root user is intended for development purpose.
+    # Our base image runs without root, but the Docker Compose implementation needs root to access the Docker socket
+    # To run Kestra in a rootless mode in production, see: https://kestra.io/docs/installation/podman-compose
+    user: "root"
+    command: server standalone
+    volumes:
+      - kestra_data:/app/storage
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/kestra-wd:/tmp/kestra-wd
+
+    environment:
+     SECRET_GCP_CREDS: |-
+        ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsCiAgInByb2plY3RfaWQiOiAia2VzdHJhLXpvb21jYW1wLXYyIiwKICAicHJpdmF0ZV9rZXlfaWQiOiAiZjAxYTAwNjI5MGFiZTNjMzMyYjA1OGNhYzFlNzJjODBlNGI3YWFhYSIsCiAgInByaXZhdGVfa2V5IjogIi0tLS0tQkVHSU4gUFJJVkFURSBLRVktLS0tLVxuTUlJRXZBSUJBREFOQmdrcWhraUc5dzBCQVFFRkFBU0NCS1l3Z2dTaUFnRUFBb0lCQVFETHIyRDJad3BNNFhKZVxuWWwydi9wcUp6SGpSU1JyMHJ3VTkrR0w0eHNTOXUrREFzMEJ3RkZYdjh4WnBMZ3dubU4xckdZTXNtOFM4UnFGTVxuakZzN054UnI3c0htQStWdUJYYVVFK3VmQ242SzJMSlRmTWw5dlh2YXRwY0N2K2JXY3FKWFhKTEZaS2ZXZ2krOFxudTRFaXFwWk9Ha0dDK1NxVjZWSjQ4dE1SNW9WZGYyc1I2cVVQeU9Va3N6UG9zb3NtZmdsWWs3VWwxNGRiSEd4VlxuamJZMjI2dVYyWjJjek40cDBNcE05NlE4bThNQitwL1VpV2NQeG1yQ2lkZVR6K0FPUzRQU2kxeGFIQjZhSlF3aVxuRFVnWHBuTWhSYnFTYU1xZTFFZjRYcjVvTnZmSDN0N2hFd3hEUEJGZkkzYVUxQnV5ak05cU5BeXVqcmlOakRTSVxuSW9YTUlXTEpBZ01CQUFFQ2dnRUFGVnBrOFYvN0FmVk9qcHVFVTl0K3F2eVBHKzJza0VNNjZ2Uzd0M1hyRVRMOVxuakdZZVZzR2pBcjA2dDdzV2xoNGQ5RWpmNmhESWJxNSs0VzREY0hGRlNFMW04V3l1SkRzWlk4dTAwMTcveGlHU1xuakZNVU1vVG5VNVg1dmRXTlp5VHNaUGswLzlHZUVNeGtJY2FNY3F4c2huS1ZOSnhYZlJEUlR4R3gwL29WT0NoZ1xuRHU3ajBkNzhoY3o3VHQvMXdCTkh1cEtrdkFhK0lEdHpLekJLanFYWnE2WkJ2eHFmMmtnUTJ6djFYdjNGUDBBNVxuODdhOFRjSW1zeStSUjB3TXpEM2tJaVZQZ2t6ODZ6UVVsN01FVU9XT1g4eGltNktYRmE4cHJKYUZETGtUTXMwRVxuVEhpZ1pPL2JvNzRTQ0ZRUlhJS2o1cHovSGlJSG9yWEhETlBsdkVSMG13S0JnUUR1TDBsOFRaRFlBMjErZmxqSVxuSUZuci9aeWN3aTVmdFFYRlFVcDdIUEMzM2RDVHpRQnVwWks5amRmMGNXTVNqSnRmUEN3K09vNDdnbE9VR3FtVlxuMER6Y1VKZmxxamdxZG5veStxVWlLdlcvd0hUdytZZS9lUGJRSHAzTW1NM3pxemxwc0cxVk95Z29HbjVCcDBNU1xuc0ZoSDMvUFZwQlpqZG9yb1JRb3F2NUVaUXdLQmdRRGE2My9nUFZFclEySmxONDNpaTViZDBBWk9DZGcxcENFbFxuTHRtRFVKbjBOQXF6UjErR0orNlJSWnJQbVFham85WlVnMlhTYk9qZ2FjUXc3Q1NFUHh5MHp1OFBvMmlBS0hsYVxuM2VmcUtWc0NicXE2cDZWRTVGQnhCY1VobTFDbWhIdm9oL2grcDFibk53NVQ1VHdxc0g0SGs4R1RZd2lLUlVsQlxuNFl4bTVGQ2RBd0tCZ0NSeTdnN3NtOGJDdDRYTTllOGlMRUNWM2RxTFNLZHl2MEJSWG9GNmkwZkgxUHhaT2NDMFxuNjhEQUxSVUdLUUFVcms0am1pMm5yazVqQWtFKzEwYkt5QlY2NjlQRWViWGR6Wk54a2NXcHgxT2hzd09SVy9tc1xuSEREN0RuRFp6V0tGaUZLcElnSVIvSEl1bzdXT1VCQlRGaDlob1NISGEzbXJFVlM4QS9OSXYzNmJBb0dBVDJ2Z1xubUptbU9PdlpacDhnK205cDdFN3IrcVBYcko0KzZCNTNDd3pTemFXVHZEYklrUU1ycWNoMndabmlycnRocG9lRlxuQ1RJNXlqQ1UzS3JQRkt0UTNzZTBNeGcxY1VrOXZabUQ2WS9YVktxUmhlWU1MMUlsWE51YkNQWXY3RGxrT3BnWlxucnRsR3pkdExkMlJTejZuNER3ZXIwcXk3REc3V2hQQXUzNlUxR2NFQ2dZQVhNZklqbTBtQ0pDcjRqaEJTVEVXUFxuUWgxbTdybTcyMmU4UzZ0RDBub2tnMFZvNFNiLzhrQzBCaUJSNW5TMTZRVnhvZktaclBoTjhvNFhlV2pkc0xaVlxuTnpxa3RsOSsvNXdTUUkrdys2eUlGc1cwTDhSOXo0QjZyZzRTSlhpYlFvaTJBN095ckQrMkQybkJLSENFNUhielxuaDY5SnVWZCtVMks2KzRTYTZ1QkJUZz09XG4tLS0tLUVORCBQUklWQVRFIEtFWS0tLS0tXG4iLAogICJjbGllbnRfZW1haWwiOiAiaGFtemEtYXlhei16b29tY2FtcEBrZXN0cmEtem9vbWNhbXAtdjIuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iLAogICJjbGllbnRfaWQiOiAiMTE1Njc4OTc0NTgyNTI3MjA2NjI4IiwKICAiYXV0aF91cmkiOiAiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tL28vb2F1dGgyL2F1dGgiLAogICJ0b2tlbl91cmkiOiAiaHR0cHM6Ly9vYXV0aDIuZ29vZ2xlYXBpcy5jb20vdG9rZW4iLAogICJhdXRoX3Byb3ZpZGVyX3g1MDlfY2VydF91cmwiOiAiaHR0cHM6Ly93d3cuZ29vZ2xlYXBpcy5jb20vb2F1dGgyL3YxL2NlcnRzIiwKICAiY2xpZW50X3g1MDlfY2VydF91cmwiOiAiaHR0cHM6Ly93d3cuZ29vZ2xlYXBpcy5jb20vcm9ib3QvdjEvbWV0YWRhdGEveDUwOS9oYW16YS1heWF6LXpvb21jYW1wJTQwa2VzdHJhLXpvb21jYW1wLXYyLmlhbS5nc2VydmljZWFjY291bnQuY29tIiwKICAidW5pdmVyc2VfZG9tYWluIjogImdvb2dsZWFwaXMuY29tIgp9Cg==
+        
+      
+     KESTRA_CONFIGURATION: |
+        datasources:
+          postgres:
+            url: jdbc:postgresql://kestra_postgres:5432/kestra
+            driverClassName: org.postgresql.Driver
+            username: kestra
+            password: k3str4
+        kestra:
+          server:
+            basicAuth:
+              username: "admin@kestra.io" # it must be a valid email address
+              password: Admin1234
+          repository:
+            type: postgres
+          storage:
+            type: local
+            local:
+              basePath: "/app/storage"
+          queue:
+            type: postgres
+          ai:
+            type: gemini
+            gemini:
+              model-name: gemini-2.5-flash
+              api-key: ${GEMINI_API_KEY}
+          tasks:
+            tmpDir:
+              path: /tmp/kestra-wd/tmp
+          url: http://localhost:8080/
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    depends_on:
+      kestra_postgres:
+        condition: service_started
+    
